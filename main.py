@@ -76,7 +76,7 @@ def run_with_ui(agent: Agent, task: str) -> str:
     """Drive ask() while rendering live tool activity in the terminal."""
     print()
     print(C.s(C.YELLOW, "You", C.RESET, ": ", C.BOLD, task, C.RESET))
-    print(C.s(C.GREEN, "Agent", C.RESET, ": ", end="", flush=True))
+    print(C.s(C.GREEN, "Agent", C.RESET, ": "), end="", flush=True)
     line = [""]
 
     def activity(kind, payload):
