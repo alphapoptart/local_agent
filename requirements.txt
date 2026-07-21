@@ -1,0 +1,4 @@
+requests>=2.25
+PyYAML>=5.4
+# Audio narration (optional, FREE, no API key). Install to enable voiceover:
+edge-tts>=6.1
