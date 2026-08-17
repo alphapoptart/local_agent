@@ -14,7 +14,6 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-
 _FRONT = re.compile(r"^---\n(.*?)\n---\n?(.*)$", re.DOTALL)
 
 
@@ -80,3 +79,4 @@ class SkillManager:
         for s in skills:
             lines.append(f"- {s['name']}: {s.get('description','')}")
         return "Available skills:\n" + "\n".join(lines)
+
