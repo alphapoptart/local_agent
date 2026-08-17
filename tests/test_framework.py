@@ -114,6 +114,13 @@ class AgentTestCase(unittest.TestCase):
         self.assertEqual(self.agent.memory.get("preferred_language"), "Python")
         self.assertEqual(self.agent.memory.get("preferred_editor"), "VS Code")
 
+    def test_conversation_history_survives_multiple_turns(self):
+        self.agent.ask("Remember my preferred language is Python")
+        self.agent.ask("Create a project called advanced_demo")
+        user_messages = [m for m in self.agent.messages if m.get("role") == "user"]
+        self.assertGreaterEqual(len(user_messages), 4)
+        self.assertIn("advanced_demo", self.agent.projects.list_projects())
+
     def test_activity_callback_reports_tool_work(self):
         events = []
         self.agent.ask("remember language as Python", on_activity=lambda kind, payload: events.append(kind))
