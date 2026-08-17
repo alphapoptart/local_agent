@@ -213,6 +213,9 @@ def build_parser() -> argparse.ArgumentParser:
     pt.add_argument("--voice", default="en-US-AriaNeural", help="voice name")
 
     sub.add_parser("chat", help="interactive chat (default)")
+    pw = sub.add_parser("web", help="launch the local web interface")
+    pw.add_argument("--port", type=int, default=8765, help="local port (default: 8765)")
+    pw.add_argument("--no-open", action="store_true", help="do not open a browser automatically")
     p.set_defaults(cmd="chat")
     return p
 
@@ -223,7 +226,11 @@ def main() -> None:
         cfg = load_config()
         agent = Agent(cfg)
         banner(cfg)
-        if getattr(args, "cmd", "chat") == "chat":
+        if getattr(args, "cmd", "chat") == "web":
+            from local_agent.web import run_web
+
+            run_web(agent, port=args.port, open_browser=not args.no_open)
+        elif getattr(args, "cmd", "chat") == "chat":
             interactive(agent)
         else:
             one_shot(agent, args)
