@@ -7,3 +7,4 @@ skills, and organize work into projects.
 No cloud required. No per-session limits. Free backends only.
 """
 __version__ = "0.1.0"
+
