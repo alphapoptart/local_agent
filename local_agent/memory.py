@@ -17,7 +17,9 @@ class Memory:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
+        # The web UI serializes access with a lock but serves requests on worker
+        # threads, so the connection must be transferable between those threads.
+        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._init()
 
@@ -90,4 +92,3 @@ class Memory:
 
     def __exit__(self, *exc):
         self.close()
-
