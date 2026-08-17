@@ -15,3 +15,4 @@ Runtime memory, sessions, workspaces, generated media, logs, and local environme
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately through GitHub's security-advisory reporting feature rather than opening a public issue. Include reproduction steps, affected files or versions, and the potential impact. Do not include real credentials or personal data in the report.
+
