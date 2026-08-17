@@ -39,12 +39,10 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit] + f"\n...[truncated to {limit} chars]"
 
 
-def build_tools(agent) -> "object":
+def build_tools(agent) -> object:
     """Register every builtin tool onto agent.registry."""
     reg = agent.registry
     cfg = agent.cfg
-    base = cfg.base_dir
-
     # ---------------- WEB ----------------
     @reg.decorator("web_search", "Search the web (keyless DuckDuckGo). Args: query (str).", {"query": "search terms"})
     def web_search(query: str) -> str:
@@ -141,8 +139,9 @@ def build_tools(agent) -> "object":
         out_path = Path(out) if out else (cfg.outputs_dir / "audio" / f"tts_{int(time.time())}.mp3")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            import edge_tts
             import asyncio
+
+            import edge_tts
             async def _synth():
                 comm = edge_tts.Communicate(text, voice)
                 await comm.save(str(out_path))
@@ -210,7 +209,7 @@ def build_tools(agent) -> "object":
             step = duration - fade
             zoom = "z='min(zoom+0.0008,1.06)'"
             parts = []
-            for i, im in enumerate(imgs):
+            for i, _im in enumerate(imgs):
                 parts.append(
                     f"[{i}:v]scale=1600:900,setsar=1,crop=1280:720,"
                     f"zoompan={zoom}:d={int(duration*fps)}:s=1280x720:fps={fps},"
@@ -299,6 +298,10 @@ def build_tools(agent) -> "object":
         {"code": "python source", "timeout": "max seconds"},
     )
     def run_code(code: str, timeout: int = 30) -> str:
+        if not cfg.allow_execution:
+            return ("run_code is disabled by default. Set "
+                    "LOCAL_AGENT_ALLOW_EXECUTION=1 to enable local execution.")
+        timeout = max(1, min(int(timeout), 120))
         with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
             f.write(code)
             tmp = f.name
@@ -319,6 +322,10 @@ def build_tools(agent) -> "object":
         {"command": "shell command", "timeout": "max seconds"},
     )
     def terminal(command: str, timeout: int = 60) -> str:
+        if not cfg.allow_execution:
+            return ("terminal is disabled by default. Set "
+                    "LOCAL_AGENT_ALLOW_EXECUTION=1 to enable shell commands.")
+        timeout = max(1, min(int(timeout), 120))
         try:
             res = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout)
             out = (res.stdout or "") + (res.stderr or "")
@@ -332,7 +339,7 @@ def build_tools(agent) -> "object":
     @reg.decorator("write_file", "Write text to a file (creating dirs). Args: path (str), content (str).",
                    {"path": "file path", "content": "file contents"})
     def write_file(path: str, content: str) -> str:
-        p = Path(path)
+        p = cfg.workspace_path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         return f"Wrote {len(content)} chars to {p.resolve()}"
@@ -340,7 +347,7 @@ def build_tools(agent) -> "object":
     @reg.decorator("read_file", "Read a text file. Args: path (str), limit (optional lines).",
                    {"path": "file path", "limit": "max lines"})
     def read_file(path: str, limit: int = 500) -> str:
-        p = Path(path)
+        p = cfg.workspace_path(path)
         if not p.exists():
             return f"File not found: {p}"
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
