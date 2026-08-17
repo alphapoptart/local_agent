@@ -15,6 +15,7 @@ by implementing ``chat()``.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import requests
@@ -96,7 +97,6 @@ class MockLLM(LLM):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self._did: set[str] = set()
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> str:
         user_last = ""
@@ -106,6 +106,12 @@ class MockLLM(LLM):
                 break
 
         low = user_last.lower()
+        def did_tool(name: str) -> bool:
+            return any(
+                m.get("role") == "assistant" and f'"{name}"' in str(m.get("content", ""))
+                for m in messages
+            )
+
         web_done = any("web_search" in str(m.get("content", "")) for m in messages
                        if m.get("role") == "assistant")
 
@@ -116,8 +122,14 @@ class MockLLM(LLM):
             return "Here are the web search results I found for your query. (mock agent demo)"
 
         # Remember: once per conversation.
-        if "remember" in low and "remember" not in self._did:
-            self._did.add("remember")
+        if "remember" in low:
+            if did_tool("remember"):
+                return "Saved that to local memory."
+            natural = re.search(r"remember\s+(?:that\s+)?(?:my\s+)?(.+?)\s+is\s+(.+?)[.!]?\s*$", user_last, re.I)
+            if natural:
+                key = re.sub(r"[^a-z0-9]+", "_", natural.group(1).lower()).strip("_")
+                value = natural.group(2).strip().rstrip(".!")
+                return json.dumps({"tool": "remember", "args": {"key": key, "value": value}})
             if "with key" in low:
                 val_part, key_part = user_last.split("with key", 1)
                 val = val_part.replace("remember", "", 1).strip().split()[-1] if val_part.strip() else "Sean"
@@ -128,11 +140,10 @@ class MockLLM(LLM):
                 key = key_part.replace("remember", "", 1).strip().split()[-1]
                 val = val_part.strip().strip(".,")
                 return json.dumps({"tool": "remember", "args": {"key": key, "value": val}})
-            return json.dumps({"tool": "remember", "args": {"key": "user_name", "value": "Sean"}})
+            return "Try a phrase like: remember my preferred language is Python."
 
         # Skill: once.
-        if "skill" in low and "skill" not in self._did:
-            self._did.add("skill")
+        if "skill" in low and not did_tool("save_skill"):
             return json.dumps({
                 "tool": "save_skill",
                 "args": {
@@ -141,14 +152,17 @@ class MockLLM(LLM):
                     "content": "def run():\n    return 'Hello from a saved skill!'",
                 },
             })
+        if "skill" in low and did_tool("save_skill"):
+            return "Saved the reusable skill locally."
 
         # Project: once.
-        if "project" in low and "project" not in self._did:
-            self._did.add("project")
+        if "project" in low and not did_tool("project_create"):
             return json.dumps({
                 "tool": "project_create",
-                "args": {"name": "website_builder", "path": str(self.cfg.projects_dir / "website_builder")},
+                "args": {"name": "website_builder"},
             })
+        if "project" in low and did_tool("project_create"):
+            return "Created the project workspace."
 
         # Default: answer like a person would.
         return f"Sure! I noted your request: \"{user_last}\". (mock agent — no model loaded)"
@@ -158,4 +172,3 @@ def build_llm(cfg: Config) -> LLM:
     if cfg.llm_backend == "mock":
         return MockLLM(cfg)
     return OllamaLLM(cfg)
-
