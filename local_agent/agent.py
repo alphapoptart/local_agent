@@ -3,9 +3,8 @@ memory/skills/projects. Model-agnostic — works with any LLM backend.
 """
 from __future__ import annotations
 
-import json
-import re
 import inspect
+import json
 from typing import Any
 
 from .config import Config, load_config
@@ -226,3 +225,4 @@ class Agent:
         if not tool:
             raise KeyError(tool_name)
         return tool.run(**kwargs)
+
