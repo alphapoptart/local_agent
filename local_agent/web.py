@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -41,7 +42,9 @@ APP_HTML = r"""<!doctype html>
     main{min-width:0;display:flex;flex-direction:column;max-height:100vh}.top{padding:24px 34px;border-bottom:1px solid var(--line);
       display:flex;justify-content:space-between;align-items:center;background:#090d1499;backdrop-filter:blur(16px)}
     .top h2{font-size:16px;margin:0}.badge{border:1px solid var(--line);padding:6px 10px;border-radius:999px;color:var(--muted);
-      font-size:12px}.chat{flex:1;overflow:auto;padding:34px;display:flex;flex-direction:column;gap:18px}
+      font-size:12px}.top-actions{display:flex;gap:9px;align-items:center}.ghost{border:1px solid var(--line);background:var(--panel);
+      color:var(--muted);border-radius:10px;padding:7px 11px;cursor:pointer}.ghost:hover{color:var(--text);border-color:#76e4c477}
+    .chat{flex:1;overflow:auto;padding:34px;display:flex;flex-direction:column;gap:18px}
     .welcome{max-width:720px;margin:auto;text-align:center;padding:32px}.welcome h3{font-size:32px;line-height:1.15;margin:0 0 14px}
     .welcome p{color:var(--muted);margin:0 auto 24px;max-width:590px}.suggestions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
     .suggestion{color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;
@@ -55,6 +58,10 @@ APP_HTML = r"""<!doctype html>
     textarea{flex:1;resize:none;min-height:48px;max-height:150px;background:transparent;border:0;outline:0;color:var(--text);
       padding:12px}.send{align-self:flex-end;border:0;background:linear-gradient(135deg,var(--accent),#5ab8ef);color:#07131a;
       font-weight:750;border-radius:13px;padding:12px 18px;cursor:pointer}.send:disabled{opacity:.45;cursor:wait}
+    .trace{margin:0 34px 8px;border:1px solid var(--line);background:#0d141f;border-radius:14px;padding:12px 14px;
+      max-height:150px;overflow:auto}.trace-head{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}.trace-item{display:flex;gap:10px;padding:7px 0;border-top:1px solid #ffffff09;
+      font:12px/1.4 ui-monospace,SFMono-Regular,monospace}.trace-item strong{color:var(--accent)}
     @media(max-width:800px){.shell{grid-template-columns:1fr}aside{display:none}.top,.chat{padding-left:20px;padding-right:20px}
       .composer{padding:14px}.suggestions{grid-template-columns:1fr}.welcome h3{font-size:26px}}
   </style>
@@ -68,13 +75,18 @@ APP_HTML = r"""<!doctype html>
       <div class="fact"><span>Backend</span><span id="backend">—</span></div>
       <div class="fact"><span>Model</span><span id="model">—</span></div>
       <div class="fact"><span>Execution</span><span id="execution" class="safe">—</span></div>
+      <div class="fact"><span>Tools</span><span id="tools">—</span></div>
+      <div class="fact"><span>Session</span><span id="messageCount">0 messages</span></div>
+      <div class="fact"><span>Uptime</span><span id="uptime">0s</span></div>
     </div></section>
     <section class="card"><h2>Memory</h2><div id="memory" class="side-list"><div>No saved facts</div></div></section>
     <section class="card"><h2>Projects</h2><div id="projects" class="side-list"><div>No projects yet</div></div></section>
+    <section class="card"><h2>Workspace</h2><div id="workspace" class="side-list"><div>No generated files</div></div></section>
     <div class="spacer"></div><div class="small">Files stay inside the managed workspace. The server listens only on this computer.</div>
   </aside>
   <main>
-    <header class="top"><div><div class="eyebrow">Agent workbench</div><h2>Conversation</h2></div><span class="badge">Local session</span></header>
+    <header class="top"><div><div class="eyebrow">Agent workbench</div><h2>Conversation</h2></div>
+      <div class="top-actions"><span class="badge">Local session</span><button id="clear" class="ghost">New session</button></div></header>
     <section id="chat" class="chat">
       <div id="welcome" class="welcome"><h3>What should we work on?</h3>
         <p>Test the tool loop, persistent memory, project tracking, and safety controls without sending your conversation to a hosted model.</p>
@@ -85,6 +97,8 @@ APP_HTML = r"""<!doctype html>
         </div>
       </div>
     </section>
+    <section id="trace" class="trace" hidden><div class="trace-head"><span>Tool activity</span><span id="traceCount"></span></div>
+      <div id="traceItems"></div></section>
     <footer class="composer"><div class="compose-box"><textarea id="input" rows="1" placeholder="Message Local Agent…"></textarea>
       <button id="send" class="send">Send</button></div></footer>
   </main>
@@ -95,18 +109,28 @@ function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>
 function message(role,text){document.querySelector('#welcome')?.remove();const el=document.createElement('div');
   el.className='message '+role;el.innerHTML=`<div class="meta">${role==='user'?'You':'Local Agent'}</div>${esc(text)}`;
   chat.appendChild(el);chat.scrollTop=chat.scrollHeight}
+function duration(s){if(s<60)return s+'s';const m=Math.floor(s/60);return m<60?m+'m':Math.floor(m/60)+'h '+m%60+'m'}
+function bytes(n){return n<1024?n+' B':(n/1024).toFixed(1)+' KB'}
 async function refresh(){const r=await fetch('/api/status'),s=await r.json();
   document.querySelector('#statusText').textContent=s.ready?'Ready':'Unavailable';document.querySelector('#backend').textContent=s.backend;
   document.querySelector('#model').textContent=s.model;document.querySelector('#execution').textContent=s.execution?'Enabled':'Safely disabled';
+  document.querySelector('#tools').textContent=s.tools;document.querySelector('#messageCount').textContent=s.messages+' messages';
+  document.querySelector('#uptime').textContent=duration(s.uptime_seconds);
   const mem=document.querySelector('#memory');mem.innerHTML=s.memory.length?s.memory.map(([k,v])=>`<div>${esc(k)}: ${esc(v)}</div>`).join(''):'<div>No saved facts</div>';
-  const projects=document.querySelector('#projects');projects.innerHTML=s.projects.length?s.projects.map(p=>`<div>${esc(p)}</div>`).join(''):'<div>No projects yet</div>'}
+  const projects=document.querySelector('#projects');projects.innerHTML=s.projects.length?s.projects.map(p=>`<div>${esc(p)}</div>`).join(''):'<div>No projects yet</div>';
+  const workspace=document.querySelector('#workspace');workspace.innerHTML=s.workspace.length?s.workspace.map(f=>`<div>${esc(f.path)} <span class="small">${bytes(f.size)}</span></div>`).join(''):'<div>No generated files</div>'}
+function showTrace(items){const trace=document.querySelector('#trace'),box=document.querySelector('#traceItems');
+  if(!items?.length){trace.hidden=true;return}trace.hidden=false;document.querySelector('#traceCount').textContent=items.length+' events';
+  box.innerHTML=items.map(i=>`<div class="trace-item"><strong>${esc(i.kind)}</strong><span>${esc(i.name)} · ${esc(JSON.stringify(i.detail))}</span></div>`).join('')}
 async function submit(text=input.value.trim()){if(!text||send.disabled)return;input.value='';message('user',text);send.disabled=true;
   const act=document.createElement('div');act.className='activity';act.textContent='Thinking locally…';chat.appendChild(act);
   try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
-    const data=await r.json();act.remove();if(!r.ok)throw new Error(data.error||'Request failed');message('assistant',data.reply);await refresh()}
+    const data=await r.json();act.remove();if(!r.ok)throw new Error(data.error||'Request failed');message('assistant',data.reply);showTrace(data.activity);await refresh()}
   catch(e){act.remove();message('assistant','I could not complete that request: '+e.message)}finally{send.disabled=false;input.focus()}}
 send.addEventListener('click',()=>submit());input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();submit()}});
 document.querySelectorAll('.suggestion').forEach(b=>b.addEventListener('click',()=>submit(b.textContent)));refresh();input.focus();
+document.querySelector('#clear').addEventListener('click',async()=>{await fetch('/api/session/clear',{method:'POST'});chat.innerHTML='<div id="welcome" class="welcome"><h3>New local session</h3><p>Conversation context cleared. Persistent memory and projects remain available.</p></div>';showTrace([]);await refresh();input.focus()});
+setInterval(refresh,10000);
 </script>
 </body></html>"""
 
@@ -114,6 +138,8 @@ document.querySelectorAll('.suggestion').forEach(b=>b.addEventListener('click',(
 class LocalAgentHandler(BaseHTTPRequestHandler):
     agent: Agent
     agent_lock: threading.Lock
+    started_at: float
+    session_history: list[dict[str, str]]
 
     def log_message(self, format: str, *args: Any) -> None:
         return
@@ -126,6 +152,16 @@ class LocalAgentHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _workspace_files(self) -> list[dict[str, Any]]:
+        files = []
+        for path in sorted(self.agent.cfg.workspace_dir.rglob("*")):
+            if path.is_file():
+                files.append({
+                    "path": str(path.relative_to(self.agent.cfg.workspace_dir)),
+                    "size": path.stat().st_size,
+                })
+        return files[:100]
 
     def do_GET(self) -> None:
         if self.path == "/":
@@ -147,12 +183,27 @@ class LocalAgentHandler(BaseHTTPRequestHandler):
                     "execution": self.agent.cfg.allow_execution,
                     "memory": list(self.agent.memory.all_kv().items()),
                     "projects": self.agent.projects.list_projects(),
+                    "workspace": self._workspace_files(),
+                    "tools": len(self.agent.registry.names()),
+                    "messages": len(self.session_history),
+                    "uptime_seconds": int(time.time() - self.started_at),
                 }
             self._json(payload)
+            return
+        if self.path == "/api/session":
+            with self.agent_lock:
+                history = list(self.session_history)
+            self._json({"history": history})
             return
         self._json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
+        if self.path == "/api/session/clear":
+            with self.agent_lock:
+                self.agent.messages = [{"role": "system", "content": self.agent._system_context()}]
+                self.session_history.clear()
+            self._json({"cleared": True})
+            return
         if self.path != "/api/chat":
             self._json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             return
@@ -162,9 +213,23 @@ class LocalAgentHandler(BaseHTTPRequestHandler):
             message = str(payload.get("message", "")).strip()
             if not message:
                 raise ValueError("Message is required")
+            activity: list[dict[str, Any]] = []
+
+            def on_activity(kind: str, detail: Any) -> None:
+                if kind == "tool" and detail:
+                    name, args = detail
+                    activity.append({"kind": "tool", "name": name, "detail": args})
+                elif kind == "result" and detail:
+                    name, result = detail
+                    activity.append({"kind": "result", "name": name, "detail": str(result)[:240]})
+
             with self.agent_lock:
-                reply = self.agent.ask(message)
-            self._json({"reply": reply})
+                reply = self.agent.ask(message, on_activity=on_activity)
+                self.session_history.extend([
+                    {"role": "user", "text": message},
+                    {"role": "assistant", "text": reply},
+                ])
+            self._json({"reply": reply, "activity": activity})
         except (ValueError, json.JSONDecodeError) as exc:
             self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         except Exception as exc:
@@ -176,7 +241,12 @@ def run_web(agent: Agent, host: str = "127.0.0.1", port: int = 8765, open_browse
     handler = type(
         "ConfiguredHandler",
         (LocalAgentHandler,),
-        {"agent": agent, "agent_lock": threading.Lock()},
+        {
+            "agent": agent,
+            "agent_lock": threading.Lock(),
+            "started_at": time.time(),
+            "session_history": [],
+        },
     )
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
