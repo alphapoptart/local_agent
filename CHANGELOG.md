@@ -10,3 +10,4 @@
 - Added CI coverage for Python 3.10–3.12.
 - Added security guidance and an MIT license.
 - Reworked documentation around verified capabilities and safe operation.
+- Added a responsive local web app with chat, status, memory, and project panels.
