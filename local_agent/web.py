@@ -6,9 +6,10 @@ library. It intentionally exposes no remote-access mode.
 from __future__ import annotations
 
 import json
+import threading
 import webbrowser
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from .agent import Agent
@@ -112,6 +113,7 @@ document.querySelectorAll('.suggestion').forEach(b=>b.addEventListener('click',(
 
 class LocalAgentHandler(BaseHTTPRequestHandler):
     agent: Agent
+    agent_lock: threading.Lock
 
     def log_message(self, format: str, *args: Any) -> None:
         return
@@ -137,14 +139,16 @@ class LocalAgentHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         if self.path == "/api/status":
-            self._json({
-                "ready": True,
-                "backend": self.agent.cfg.llm_backend,
-                "model": self.agent.cfg.model,
-                "execution": self.agent.cfg.allow_execution,
-                "memory": list(self.agent.memory.all_kv().items()),
-                "projects": self.agent.projects.list_projects(),
-            })
+            with self.agent_lock:
+                payload = {
+                    "ready": True,
+                    "backend": self.agent.cfg.llm_backend,
+                    "model": self.agent.cfg.model,
+                    "execution": self.agent.cfg.allow_execution,
+                    "memory": list(self.agent.memory.all_kv().items()),
+                    "projects": self.agent.projects.list_projects(),
+                }
+            self._json(payload)
             return
         self._json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
 
@@ -158,7 +162,9 @@ class LocalAgentHandler(BaseHTTPRequestHandler):
             message = str(payload.get("message", "")).strip()
             if not message:
                 raise ValueError("Message is required")
-            self._json({"reply": self.agent.ask(message)})
+            with self.agent_lock:
+                reply = self.agent.ask(message)
+            self._json({"reply": reply})
         except (ValueError, json.JSONDecodeError) as exc:
             self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         except Exception as exc:
@@ -167,8 +173,13 @@ class LocalAgentHandler(BaseHTTPRequestHandler):
 
 def run_web(agent: Agent, host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) -> None:
     """Run the local-only web interface until interrupted."""
-    handler = type("ConfiguredHandler", (LocalAgentHandler,), {"agent": agent})
-    server = HTTPServer((host, port), handler)
+    handler = type(
+        "ConfiguredHandler",
+        (LocalAgentHandler,),
+        {"agent": agent, "agent_lock": threading.Lock()},
+    )
+    server = ThreadingHTTPServer((host, port), handler)
+    server.daemon_threads = True
     url = f"http://{host}:{port}"
     print(f"Local Agent web app: {url}")
     print("Press Ctrl+C to stop.")
