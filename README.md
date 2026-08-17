@@ -65,6 +65,14 @@ local-agent
 
 The mock backend is deterministic and intended for evaluation, demos, and CI—not general conversation.
 
+## Launch the web app
+
+```bash
+LOCAL_AGENT_LLM=mock local-agent web
+```
+
+Open <http://127.0.0.1:8765>. The responsive interface includes chat, runtime and safety status, persistent memory, project tracking, suggested evaluation prompts, and visible local-processing feedback. The server binds only to the local computer.
+
 ## Use a real local model
 
 ```bash
@@ -151,6 +159,7 @@ local_agent/
 ├── memory.py         SQLite persistence
 ├── projects.py       project manifests and task tracking
 ├── skills.py         reusable skill storage
+├── web.py            responsive local web application
 └── tools/
     ├── __init__.py   registry and tool metadata
     └── builtins.py   research, media, execution, file, and state tools
