@@ -1,192 +1,182 @@
-# Local Agent 🤖
+# Local Agent
 
-A **free, fully-local, session-unlimited** AI agent framework. Run any open
-model as an autonomous agent that can search the web, generate images/video,
-write and run code, manage persistent memory, save reusable skills, and organize
-work into projects.
+A privacy-first Python workbench for running an AI agent with local language models. Local Agent combines a transparent tool-calling loop, persistent SQLite memory, reusable skills, managed project workspaces, and optional media tools without requiring a hosted LLM account.
 
-> No API keys required. No per-session limits. No cloud lock-in. Your data
-> lives under `~/local_agent_data`.
+> Portfolio release: the core workflow runs locally, the complete offline test suite needs no model or API key, and potentially dangerous execution tools are disabled by default.
 
----
+## What it demonstrates
 
-## What it can do (like Hermes / Claude)
+- A model-agnostic agent loop that parses tool calls, executes them, returns observations, and stops safely
+- Persistent facts and conversation history backed by SQLite
+- Reusable Markdown/YAML skills loaded into the model context
+- Project manifests with goals, tasks, status, and isolated storage
+- Workspace-confined file operations with traversal protection
+- Ollama integration for local open-weight models
+- A deterministic mock backend for testing without a GPU, network, or model download
+- Optional web research, image generation, text-to-speech, and video assembly
+- Cross-platform Python packaging and automated CI on Python 3.10–3.12
 
-| Capability | Tool | Free backend |
+## Safety model
+
+Local Agent is intentionally conservative by default:
+
+- File tools can access only the managed workspace under `LOCAL_AGENT_HOME`.
+- Absolute paths and `..` traversal outside that workspace are rejected.
+- Project names are validated and projects remain inside managed storage.
+- Python and shell execution are disabled unless the operator explicitly sets `LOCAL_AGENT_ALLOW_EXECUTION=1`.
+- Tool loops, output size, and execution time have hard limits.
+- Runtime memory, workspaces, media, logs, and local configuration are excluded from Git.
+
+Local execution remains powerful after it is enabled. Review generated commands and use a dedicated workspace for important tasks. See [SECURITY.md](SECURITY.md).
+
+## Quick start
+
+Requirements: Python 3.10+ and, for real-model chat, [Ollama](https://ollama.com/).
+
+```bash
+git clone https://github.com/alphapoptart/local_agent.git
+cd local_agent
+python -m venv .venv
+
+# macOS/Linux
+source .venv/bin/activate
+
+# Windows PowerShell
+# .venv\Scripts\Activate.ps1
+
+python -m pip install -e .
+python selftest.py
+```
+
+The smoke test proves memory, managed files, projects, skills, and the safe execution default without downloading a model.
+
+## Try the interface without a model
+
+```bash
+LOCAL_AGENT_LLM=mock local-agent
+```
+
+Windows PowerShell:
+
+```powershell
+$env:LOCAL_AGENT_LLM = "mock"
+local-agent
+```
+
+The mock backend is deterministic and intended for evaluation, demos, and CI—not general conversation.
+
+## Use a real local model
+
+```bash
+ollama pull llama3.1:8b
+local-agent
+```
+
+Choose another installed model with `LOCAL_AGENT_MODEL`, or point `OLLAMA_HOST` at another Ollama-compatible endpoint.
+
+## Commands and tools
+
+Chat normally, or use the optional shortcuts:
+
+```text
+/remember <key> <value>
+/recall
+/skills
+/projects
+/project <name>
+/clear
+/exit
+```
+
+Core tools include:
+
+| Area | Tools | Default behavior |
 |---|---|---|
-| Web search | `web_search` | DuckDuckGo (keyless) |
-| Fetch web pages | `web_fetch` | requests |
-| Generate images | `image_generate` | Pollinations.ai (keyless) or your local Stable Diffusion |
-| Generate video | `video_from_images`, `video_from_prompts` | local `ffmpeg` (offline Ken Burns + crossfades) or remote provider |
-| Audio narration | `text_to_speech` | edge-tts (keyless, free) muxed into video |
-| Write/run code | `run_code`, `terminal` | local Python / shell |
-| Files | `write_file`, `read_file` | local filesystem |
-| Long-term memory | `remember`, `recall` | SQLite (persists forever) |
-| Reusable skills | `save_skill`, `list_skills`, `delete_skill` | local files |
-| Projects | `project_create`, `project_plan`, `project_status` | local folders |
+| Memory | `remember`, `recall` | Stored locally in SQLite |
+| Files | `write_file`, `read_file` | Confined to the managed workspace |
+| Projects | `project_create`, `project_plan`, `project_status` | Confined to managed project storage |
+| Skills | `save_skill`, `list_skills`, `delete_skill` | Stored locally |
+| Research | `web_search`, `web_fetch` | Uses network access when invoked |
+| Media | image, TTS, and video tools | Optional local or keyless services |
+| Execution | `run_code`, `terminal` | Disabled until explicitly enabled |
 
-The agent talks like a person. You chat normally; when a task needs doing it
-reaches for a tool, observes the result, and either does the next step or
-replies — retrying with a smart workaround (in plain language, never a raw
-error code) if something fails. No special syntax or rigid formatting required.
+## Enable local execution
 
----
-
-## Quick start (free, no GPU required to try)
+Only enable execution in an environment where you are comfortable running model-generated code:
 
 ```bash
-# 1. Install deps
-pip install -r requirements.txt
-
-# 2. Try it instantly with the keyless mock backend (no model download)
-LOCAL_AGENT_LLM=mock python main.py        # interactive
-LOCAL_AGENT_LLM=mock python selftest.py    # proves every feature works
-
-# 3. For a REAL model, install Ollama (https://ollama.com) and pull one:
-ollama pull llama3.1:8b
-python main.py                              # interactive chat with the model
+LOCAL_AGENT_ALLOW_EXECUTION=1 local-agent
 ```
 
-### One-shot generators (no chat needed)
+Execution calls are still time-limited and output-limited, but this is not an operating-system sandbox.
 
-```bash
-python main.py image "a red dragon" "a quiet forest" --aspect square
-python main.py video "neon skyline" "calm lake" --duration 2.5 --voiceover "A tour of two worlds."
-python main.py tts "Hello from my local agent." --voice en-US-GuyNeural
-```
+## Configuration
 
-On **Windows** use `set` instead of `export`:
-```cmd
-set LOCAL_AGENT_LLM=mock
-python main.py
-```
-
----
-
-## Using a real local model
-
-Ollama (recommended — free, one command):
-
-```bash
-ollama pull llama3.1:8b
-python main.py
-```
-
-Other OpenAI-compatible local servers (LocalAI, LM Studio, llama.cpp server,
-vLLM) work too — point `OllamaLLM` at them or implement `.chat()` in
-`local_agent/llm.py`. The interface is three lines; everything else is identical.
-
----
-
-## CLI commands
-
-## Talking to it
-
-Just chat. No rigid format — mix a sentence with a tool call if you like:
-
-```
-You> hey, can you search for free local AI models and remember my name is Sean?
-Agent> Sure — searching now…  (calls web_search, then remember)
-       Done! I found several options and saved your name as Sean.
-```
-
-Slash shortcuts are optional power-user moves; plain English also works for most
-things (e.g. "remember that my name is Sean" triggers memory just as well). If a
-tool fails, the agent tells you in plain words and tries another way — you'll
-never see a raw stack trace or error code in the chat.
-
-Interactive chat (`python main.py`):
-```
-You> <any task>
-You> /remember user_name Sean     # store a fact
-You> /skills                     # list saved skills
-You> /projects                   # list projects
-You> /project website_builder    # create a project
-You> /clear                      # reset conversation (keeps memory/projects)
-You> /exit
-```
-
----
+| Variable | Default | Purpose |
+|---|---|---|
+| `LOCAL_AGENT_LLM` | `ollama` | `ollama` or deterministic `mock` backend |
+| `LOCAL_AGENT_MODEL` | `llama3.1:8b` | Ollama model name |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama endpoint |
+| `LOCAL_AGENT_HOME` | `~/local_agent_data` | Memory, projects, outputs, skills, and workspace |
+| `LOCAL_AGENT_ALLOW_EXECUTION` | disabled | Explicitly enables Python and shell tools |
+| `STABLE_DIFFUSION_API` | unset | Optional local image-generation endpoint |
+| `EDGE_TTS_VOICE` | `en-US-AriaNeural` | Optional narration voice |
 
 ## Architecture
 
+```text
+User request
+    │
+    ▼
+Agent loop ─────► Model backend (Ollama or deterministic mock)
+    │                         │
+    │       tool call ◄───────┘
+    ▼
+Tool registry
+    ├── memory ──────────────► SQLite
+    ├── skills ──────────────► managed skill files
+    ├── projects ────────────► managed project manifests
+    ├── files ───────────────► confined workspace
+    ├── research/media ──────► optional network/local services
+    └── execution ───────────► explicit opt-in only
 ```
+
+The implementation is deliberately small enough to audit:
+
+```text
 local_agent/
-├── config.py        # paths, model choice, env overrides
-├── llm.py           # model-agnostic backend (Ollama / mock) — plug in any!
-├── agent.py         # the tool-calling loop + context assembly
-├── memory.py        # SQLite key/value + conversation history (persistent)
-├── skills.py        # save / load / delete reusable skills
-├── projects.py      # project workspaces + task lists
-├── tools/
-│   ├── __init__.py  # Tool + ToolRegistry
-│   └── builtins.py  # all built-in tools (free, keyless)
-└── __init__.py
-main.py              # interactive CLI
-selftest.py          # zero-dep proof it works
+├── agent.py          tool-calling loop and result feedback
+├── config.py         environment configuration and workspace policy
+├── llm.py            Ollama and deterministic mock backends
+├── memory.py         SQLite persistence
+├── projects.py       project manifests and task tracking
+├── skills.py         reusable skill storage
+└── tools/
+    ├── __init__.py   registry and tool metadata
+    └── builtins.py   research, media, execution, file, and state tools
 ```
 
-### The agent loop (`agent.py`)
-1. Assemble system prompt + tool list + saved skills.
-2. Ask the model. If it returns `{"tool": name, "args": {...}}` → run it.
-3. Feed the result back and loop (up to `max_iterations`, a safety cap — **not**
-   a session limit).
-4. When the model replies in plain text, return the answer.
+## Verification
 
-### Adding your own tool
-```python
-@reg.decorator("my_tool", "Does X. Args: a (str).", {"a": "description"})
-def my_tool(a: str) -> str:
-    return do_work(a)
-```
-Register it in `local_agent/tools/builtins.py`. The model can call it
-immediately.
-
-### Adding a model backend
-Implement `chat(messages, tools) -> str` in `local_agent/llm.py` and select it
-via `LOCAL_AGENT_LLM`.
-
----
-
-## Environment variables
-
-| Var | Default | Meaning |
-|---|---|---|
-| `LOCAL_AGENT_LLM` | `ollama` | `ollama` or `mock` |
-| `LOCAL_AGENT_MODEL` | `llama3.1:8b` | model name |
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama endpoint |
-| `LOCAL_AGENT_HOME` | `~/local_agent_data` | data directory |
-| `STABLE_DIFFUSION_API` | _(unset)_ | local SD/ComfyUI endpoint for images |
-| `VIDEO_API` | _(unset)_ | remote video provider endpoint |
-| `EDGE_TTS_VOICE` | `en-US-AriaNeural` | default narration voice |
-
----
-
-## Testing
-
-A permanent `pytest` suite covers the parser, every tool, and a mock
-multi-step run (all keyless — no model, no network):
+Run the complete standard-library suite:
 
 ```bash
-pip install pytest
-pytest -q            # 14 tests
-LOCAL_AGENT_LLM=mock python selftest.py   # zero-dep alternative
+python -m unittest discover -s tests -v
+python selftest.py
 ```
 
-A real-Ollama run is exercised by `live_run.py` (with `ollama` installed):
+The suite covers both accepted tool schemas, malformed Windows-style escapes, multiple tool calls, memory persistence, skills, project lifecycle, workspace file isolation, path traversal rejection, safe execution defaults, explicit execution opt-in, callbacks, and an end-to-end mock tool loop.
 
-```bash
-python live_run.py "search the web for local AI best practices, then make a project"
-```
+GitHub Actions runs the same checks on Python 3.10, 3.11, and 3.12.
 
-## Limitations & honest notes
-- **Free image/video**: defaults to keyless web APIs (Pollinations) and offline
-  `ffmpeg`. For private/local generation set `STABLE_DIFFUSION_API` to your own
-  SD/ComfyUI server.
-- **Model quality** depends on the local model you choose. An 8B model reasons
-  about tools well; bigger models are better at long multi-step plans.
-- This is a from-scratch framework, not a wrapper around a paid service — so it
-  is yours to extend, audit, and run forever at zero cost.
+## Scope and limitations
+
+- Model quality and tool-selection reliability depend on the local model.
+- The JSON tool protocol is intentionally simple and educational rather than a replacement for a production agent SDK.
+- Optional keyless media providers can change or become unavailable; local backends are preferable for repeatability and privacy.
+- Shell execution is intentionally opt-in and is not an OS-level sandbox.
+- The project is a local CLI workbench; it does not expose an authenticated multi-user service.
 
 ## License
-MIT — do whatever you want with it.
+
+[MIT](LICENSE)
