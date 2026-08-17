@@ -10,6 +10,7 @@ from pathlib import Path
 
 from local_agent.agent import Agent
 from local_agent.config import Config
+from local_agent.web import APP_HTML
 
 
 class AgentTestCase(unittest.TestCase):
@@ -93,6 +94,16 @@ class AgentTestCase(unittest.TestCase):
         self.assertTrue(reply)
         self.assertEqual(self.agent.memory.get("theme"), "dark")
 
+    def test_mock_agent_understands_natural_memory_phrase(self):
+        self.agent.ask("Remember my preferred language is Python")
+        self.assertEqual(self.agent.memory.get("preferred_language"), "Python")
+
+    def test_mock_agent_can_remember_multiple_facts(self):
+        self.agent.ask("Remember my preferred language is Python")
+        self.agent.ask("Remember my preferred editor is VS Code")
+        self.assertEqual(self.agent.memory.get("preferred_language"), "Python")
+        self.assertEqual(self.agent.memory.get("preferred_editor"), "VS Code")
+
     def test_activity_callback_reports_tool_work(self):
         events = []
         self.agent.ask("remember language as Python", on_activity=lambda kind, payload: events.append(kind))
@@ -102,6 +113,12 @@ class AgentTestCase(unittest.TestCase):
     def test_registry_exposes_expected_tools(self):
         expected = {"remember", "recall", "write_file", "read_file", "run_code", "terminal"}
         self.assertTrue(expected.issubset(set(self.agent.registry.names())))
+
+    def test_web_interface_contains_core_panels(self):
+        self.assertIn('id="chat"', APP_HTML)
+        self.assertIn('id="memory"', APP_HTML)
+        self.assertIn('id="projects"', APP_HTML)
+        self.assertIn("/api/chat", APP_HTML)
 
 
 if __name__ == "__main__":
