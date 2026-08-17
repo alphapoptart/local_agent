@@ -15,7 +15,6 @@ by implementing ``chat()``.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 import requests
@@ -159,3 +158,4 @@ def build_llm(cfg: Config) -> LLM:
     if cfg.llm_backend == "mock":
         return MockLLM(cfg)
     return OllamaLLM(cfg)
+
