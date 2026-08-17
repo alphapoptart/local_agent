@@ -57,6 +57,16 @@ class AgentTestCase(unittest.TestCase):
         finally:
             other.memory.close()
 
+    def test_memory_connection_supports_web_worker_thread(self):
+        import threading
+
+        result = []
+        worker = threading.Thread(target=lambda: result.append(self.agent.memory.all_kv()))
+        worker.start()
+        worker.join(timeout=2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(result, [{}])
+
     def test_skill_round_trip(self):
         self.agent.run_tool("save_skill", name="hello", description="demo", content="Say hello")
         self.assertIn("hello", self.agent.run_tool("list_skills"))
