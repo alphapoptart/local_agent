@@ -50,7 +50,10 @@ class Agent:
           ("tool",  (name, args))   -> about to run a tool
           ("result", (name, obs))   -> tool finished
         """
-        self.messages = [{"role": "system", "content": self._system_context()}]
+        # Refresh dynamic context while preserving the current conversation.
+        self.messages[0] = {"role": "system", "content": self._system_context()}
+        if len(self.messages) > 40:
+            self.messages = [self.messages[0], *self.messages[-39:]]
         self.messages.append({"role": "user", "content": user_text})
         self.memory.log("user", user_text)
 
@@ -225,4 +228,3 @@ class Agent:
         if not tool:
             raise KeyError(tool_name)
         return tool.run(**kwargs)
-
