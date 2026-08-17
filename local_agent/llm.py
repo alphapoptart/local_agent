@@ -106,10 +106,17 @@ class MockLLM(LLM):
                 break
 
         low = user_last.lower()
+        current_turn_start = max(
+            i
+            for i, message in enumerate(messages)
+            if message.get("role") == "user"
+            and not str(message.get("content", "")).startswith("tool_result:")
+        )
+
         def did_tool(name: str) -> bool:
             return any(
                 m.get("role") == "assistant" and f'"{name}"' in str(m.get("content", ""))
-                for m in messages
+                for m in messages[current_turn_start + 1 :]
             )
 
         web_done = any("web_search" in str(m.get("content", "")) for m in messages
@@ -157,9 +164,11 @@ class MockLLM(LLM):
 
         # Project: once.
         if "project" in low and not did_tool("project_create"):
+            project_match = re.search(r"project\s+(?:called|named)\s+([a-z0-9_-]+)", user_last, re.I)
+            project_name = project_match.group(1) if project_match else "demo_project"
             return json.dumps({
                 "tool": "project_create",
-                "args": {"name": "website_builder"},
+                "args": {"name": project_name},
             })
         if "project" in low and did_tool("project_create"):
             return "Created the project workspace."
