@@ -11,3 +11,4 @@
 - Added security guidance and an MIT license.
 - Reworked documentation around verified capabilities and safe operation.
 - Added a responsive local web app with chat, status, memory, and project panels.
+- Added concurrent request handling with serialized agent state for reliable multi-tab use.
