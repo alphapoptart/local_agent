@@ -7,9 +7,8 @@ to the model as an observation.
 """
 from __future__ import annotations
 
-import functools
-import inspect
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 class Tool:
