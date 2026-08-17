@@ -90,3 +90,4 @@ class Memory:
 
     def __exit__(self, *exc):
         self.close()
+
