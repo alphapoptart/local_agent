@@ -4,6 +4,8 @@ A privacy-first Python workbench for running an AI agent with local language mod
 
 > Portfolio release: the core workflow runs locally, the complete offline test suite needs no model or API key, and potentially dangerous execution tools are disabled by default.
 
+![Local Agent workbench showing chat, runtime status, projects, workspace files, and tool activity](docs/local-agent-workbench.png)
+
 ## What it demonstrates
 
 - A model-agnostic agent loop that parses tool calls, executes them, returns observations, and stops safely
