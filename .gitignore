@@ -1,8 +1,41 @@
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
 
-# OS / editor noise
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+*.local
+config.local.*
+*.pem
+*.key
+
+# Runtime state and user data
+local_agent_data/
+memory.db
+*.sqlite
+*.sqlite3
+sessions/
+workspace/
+outputs/
+logs/
+*.log
+
+# Generated media
+*.mp3
+*.mp4
+*.wav
+
+# OS and editor noise
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
