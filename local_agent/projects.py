@@ -17,7 +17,14 @@ class ProjectManager:
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def create(self, name: str, path: str | None = None) -> dict:
-        folder = Path(path) if path else (self.dir / name)
+        safe_name = "".join(ch for ch in name.strip() if ch.isalnum() or ch in {"-", "_"})
+        if not safe_name or safe_name != name.strip():
+            raise ValueError("project names may contain only letters, numbers, '-' and '_'")
+        if path:
+            raise ValueError("custom project paths are disabled; projects stay in managed storage")
+        folder = (self.dir / safe_name).resolve()
+        if self.dir.resolve() not in folder.parents:
+            raise ValueError("project path escapes managed storage")
         folder.mkdir(parents=True, exist_ok=True)
         manifest = {
             "name": name,
