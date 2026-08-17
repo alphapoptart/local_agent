@@ -212,7 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
     pt.add_argument("text", help="text to speak")
     pt.add_argument("--voice", default="en-US-AriaNeural", help="voice name")
 
-    pc = sub.add_parser("chat", help="interactive chat (default)")
+    sub.add_parser("chat", help="interactive chat (default)")
     p.set_defaults(cmd="chat")
     return p
 
